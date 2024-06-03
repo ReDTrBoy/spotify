@@ -1,13 +1,13 @@
 param (
   [Parameter()]
   [switch]
-  $UninstallSpotifyStoreEdition = (Read-Host -Prompt 'Windows Magazasi Spotify surumunu kaldirmak istiyor musunuz? (E/H)') -eq 'e',
+  $UninstallSpotifyStoreEdition = (Read-Host -Prompt 'Uninstall Spotify Windows Store edition if it exists (Y/N)') -eq 'y',
   [Parameter()]
   [switch]
   $UpdateSpotify
 )
 
-# `Stop-Process` hatalarini yoksay
+# Ignore errors from `Stop-Process`
 $PSDefaultParameterValues['Stop-Process:ErrorAction'] = [System.Management.Automation.ActionPreference]::SilentlyContinue
 
 [System.Version] $minimalSupportedSpotifyVersion = '1.2.8.923'
@@ -29,12 +29,12 @@ function Get-File
     $BufferSize = 1,
     [Parameter(ValueFromPipelineByPropertyName)]
     [ValidateNotNullOrEmpty()]
-    [ValidateSet('KB', 'MB')]
+    [ValidateSet('KB, MB')]
     [String]
     $BufferUnit = 'MB',
     [Parameter(ValueFromPipelineByPropertyName)]
     [ValidateNotNullOrEmpty()]
-    [ValidateSet('KB', 'MB')]
+    [ValidateSet('KB, MB')]
     [Int32]
     $Timeout = 10000
   )
@@ -45,13 +45,13 @@ function Get-File
 
   if ($useBitTransfer)
   {
-    Write-Information -MessageData 'Windows PowerShell kullandiginiz icin BitTransfer yontemine basvuruluyor'
+    Write-Information -MessageData 'Using a fallback BitTransfer method since you are running Windows PowerShell'
     Start-BitsTransfer -Source $Uri -Destination "$($TargetFile.FullName)"
   }
   else
   {
     $request = [System.Net.HttpWebRequest]::Create($Uri)
-    $request.set_Timeout($Timeout) #15 saniye zaman asimi
+    $request.set_Timeout($Timeout) #15 second timeout
     $response = $request.GetResponse()
     $totalLength = [System.Math]::Floor($response.get_ContentLength() / 1024)
     $responseStream = $response.GetResponseStream()
@@ -62,7 +62,7 @@ function Get-File
       'MB' { $BufferSize = $BufferSize * 1024 * 1024 }
       Default { $BufferSize = 1024 * 1024 }
     }
-    Write-Verbose -Message "Tampon boyutu: $BufferSize B ($($BufferSize/("1$BufferUnit")) $BufferUnit)"
+    Write-Verbose -Message "Buffer size: $BufferSize B ($($BufferSize/("1$BufferUnit")) $BufferUnit)"
     $buffer = New-Object byte[] $BufferSize
     $count = $responseStream.Read($buffer, 0, $buffer.length)
     $downloadedBytes = $count
@@ -72,10 +72,10 @@ function Get-File
       $targetStream.Write($buffer, 0, $count)
       $count = $responseStream.Read($buffer, 0, $buffer.length)
       $downloadedBytes = $downloadedBytes + $count
-      Write-Progress -Activity "'$downloadedFileName' dosyasi indiriliyor" -Status "Indirildi ($([System.Math]::Floor($downloadedBytes/1024))K of $($totalLength)K): " -PercentComplete ((([System.Math]::Floor($downloadedBytes / 1024)) / $totalLength) * 100)
+      Write-Progress -Activity "Downloading file '$downloadedFileName'" -Status "Downloaded ($([System.Math]::Floor($downloadedBytes/1024))K of $($totalLength)K): " -PercentComplete ((([System.Math]::Floor($downloadedBytes / 1024)) / $totalLength) * 100)
     }
 
-    Write-Progress -Activity "'$downloadedFileName' dosyasinin indirilmesi tamamlandi"
+    Write-Progress -Activity "Finished downloading file '$downloadedFileName'"
 
     $targetStream.Flush()
     $targetStream.Close()
@@ -104,7 +104,14 @@ function Test-SpotifyVersion
 
 Write-Host @'
 **********************************
-Yazarlar: @ReDTrBoy
+
+    ____       ____  ______     ____                
+   / __ \___  / __ \/_  __/____/ __ )____  __  __   
+  / /_/ / _ \/ / / / / / / ___/ __  / __ \/ / / /   
+ / _, _/  __/ /_/ / / / / /  / /_/ / /_/ / /_/ /    
+/_/ |_|\___/_____/ /_/ /_/  /_____/\____/\__, /_____
+                                        /____/_____/
+
 **********************************
 '@
 
@@ -114,7 +121,7 @@ $spotifyApps = Join-Path -Path $spotifyDirectory -ChildPath 'Apps'
 
 [System.Version] $actualSpotifyClientVersion = (Get-ChildItem -LiteralPath $spotifyExecutable -ErrorAction:SilentlyContinue).VersionInfo.ProductVersionRaw
 
-Write-Host "Spotify durduruluyor...`n"
+Write-Host "Stopping Spotify...`n"
 Stop-Process -Name Spotify
 Stop-Process -Name SpotifyWebHelper
 
@@ -125,16 +132,16 @@ if ($PSVersionTable.PSVersion.Major -ge 7)
 
 if (Get-AppxPackage -Name SpotifyAB.SpotifyMusic)
 {
-  Write-Host "Microsoft Magazasi versiyonu tespit edildi, desteklenmiyor.`n"
+  Write-Host "The Microsoft Store version of Spotify has been detected which is not supported.`n"
 
   if ($UninstallSpotifyStoreEdition)
   {
-    Write-Host "Spotify kaldiriliyor.`n"
+    Write-Host "Uninstalling Spotify.`n"
     Get-AppxPackage -Name SpotifyAB.SpotifyMusic | Remove-AppxPackage
   }
   else
   {
-    Read-Host "Cikiliyor...`nCikmak icin bir tusa basin..."
+    Read-Host "Exiting...`nPress any key to exit..."
     exit
   }
 }
@@ -142,7 +149,7 @@ if (Get-AppxPackage -Name SpotifyAB.SpotifyMusic)
 Push-Location -LiteralPath $env:TEMP
 try
 {
-  # Zaman bazli benzersiz dizin adi
+  # Unique directory name based on time
   New-Item -Type Directory -Name "BlockTheSpot-$(Get-Date -UFormat '%Y-%m-%d_%H-%M-%S')" |
   Convert-Path |
   Set-Location
@@ -150,7 +157,7 @@ try
 catch
 {
   Write-Output $_
-  Read-Host 'Cikmak icin bir tusa basin...'
+  Read-Host 'Press any key to exit...'
   exit
 }
 
@@ -164,7 +171,7 @@ if (-not $spotifyInstalled) {
 
 if (-not $UpdateSpotify -and $unsupportedClientVersion)
 {
-  if ((Read-Host -Prompt 'Block the Spot yuklemek icin Spotify istemcisi guncellenmelidir. Devam etmek istiyor musunuz? (E/H)') -ne 'e')
+  if ((Read-Host -Prompt 'In order to install Block the Spot, your Spotify client must be updated. Do you want to continue? (Y/N)') -ne 'y')
   {
     exit
   }
@@ -172,11 +179,11 @@ if (-not $UpdateSpotify -and $unsupportedClientVersion)
 
 if (-not $spotifyInstalled -or $UpdateSpotify -or $unsupportedClientVersion)
 {
-  Write-Host 'En son Spotify tam kurulum dosyasi indiriliyor, lutfen bekleyin...'
+  Write-Host 'Downloading the latest Spotify full setup, please wait...'
   $spotifySetupFilePath = Join-Path -Path $PWD -ChildPath 'SpotifyFullSetup.exe'
   try
   {
-    if ([Environment]::Is64BitOperatingSystem) { # Bilgisayarin 64-bit isletim sistemi calistirip calistirmadigini kontrol edin
+    if ([Environment]::Is64BitOperatingSystem) { # Check if the computer is running a 64-bit version of Windows
       $uri = 'https://download.scdn.co/SpotifyFullSetupX64.exe'
     } else {
       $uri = 'https://download.scdn.co/SpotifyFullSetup.exe'
@@ -186,28 +193,28 @@ if (-not $spotifyInstalled -or $UpdateSpotify -or $unsupportedClientVersion)
   catch
   {
     Write-Output $_
-    Read-Host 'Cikmak icin bir tusa basin...'
+    Read-Host 'Press any key to exit...'
     exit
   }
   New-Item -Path $spotifyDirectory -ItemType:Directory -Force | Write-Verbose
 
   [System.Security.Principal.WindowsPrincipal] $principal = [System.Security.Principal.WindowsIdentity]::GetCurrent()
   $isUserAdmin = $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
-  Write-Host 'Kurulum calistiriliyor...'
+  Write-Host 'Running installation...'
   if ($isUserAdmin)
   {
     Write-Host
-    Write-Host 'Zamanlanmis gorev olusturuluyor...'
+    Write-Host 'Creating scheduled task...'
     $apppath = 'powershell.exe'
-    $taskname = 'Spotify kurulumu'
+    $taskname = 'Spotify install'
     $action = New-ScheduledTaskAction -Execute $apppath -Argument "-NoLogo -NoProfile -Command & `'$spotifySetupFilePath`'"
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date)
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -WakeToRun
     Register-ScheduledTask -Action $action -Trigger $trigger -TaskName $taskname -Settings $settings -Force | Write-Verbose
-    Write-Host 'Kurulum gorevi zamanlandi. Gorev baslatiliyor...'
+    Write-Host 'The install task has been scheduled. Starting the task...'
     Start-ScheduledTask -TaskName $taskname
     Start-Sleep -Seconds 2
-    Write-Host 'Gorev kaydi kaldiriliyor...'
+    Write-Host 'Unregistering the task...'
     Unregister-ScheduledTask -TaskName $taskname -Confirm:$false
     Start-Sleep -Seconds 2
   }
@@ -218,22 +225,23 @@ if (-not $spotifyInstalled -or $UpdateSpotify -or $unsupportedClientVersion)
 
   while ($null -eq (Get-Process -Name Spotify -ErrorAction SilentlyContinue))
   {
-    # Kurulum tamamlanana kadar bekleniyor
+    # Waiting until installation complete
     Start-Sleep -Milliseconds 100
   }
 
-  Write-Host 'Spotify tekrar durduruluyor'
+
+  Write-Host 'Stopping Spotify...Again'
 
   Stop-Process -Name Spotify
   Stop-Process -Name SpotifyWebHelper
-  if ([Environment]::Is64BitOperatingSystem) { # Bilgisayarin 64-bit isletim sistemi calistirip calistirmadigini kontrol edin
+  if ([Environment]::Is64BitOperatingSystem) { # Check if the computer is running a 64-bit version of Windows
     Stop-Process -Name SpotifyFullSetupX64
   } else {
      Stop-Process -Name SpotifyFullSetup
   }
 }
 
-Write-Host "Son yamayi indiriliyor (chrome_elf.zip)...`n"
+Write-Host "Downloading latest patch (chrome_elf.zip)...`n"
 $elfPath = Join-Path -Path $PWD -ChildPath 'chrome_elf.zip'
 try
 {
@@ -244,7 +252,7 @@ try
   if ($is64Bit) {
     $uri = 'https://github.com/mrpond/BlockTheSpot/releases/latest/download/chrome_elf.zip'
   } else {
-    Write-Host 'Su anda reklam engelleyici duzgun calismayabilir cunku x86 mimarisi yeni bir guncelleme almadi.'
+    Write-Host 'At the moment, the ad blocker may not work properly as the x86 architecture has not received a new update.'
     $uri = 'https://github.com/mrpond/BlockTheSpot/releases/download/2023.5.20.80/chrome_elf.zip'
   }
 
@@ -259,8 +267,8 @@ catch
 Expand-Archive -Force -LiteralPath "$elfPath" -DestinationPath $PWD
 Remove-Item -LiteralPath "$elfPath" -Force
 
-Write-Host 'Spotify yamalaniyor...'
-$patchFiles = (Join-Path -Path $PWD -ChildPath 'chrome_elf.dll'), (Join-Path -Path $PWD -ChildPath 'config.ini')
+Write-Host 'Patching Spotify...'
+$patchFiles = (Join-Path -Path $PWD -ChildPath 'dpapi.dll'), (Join-Path -Path $PWD -ChildPath 'config.ini')
 
 Copy-Item -LiteralPath $patchFiles -Destination "$spotifyDirectory"
 
@@ -272,7 +280,7 @@ function Install-VcRedist {
     if ([Environment]::Is64BitOperatingSystem) {
         if (!(Test-Path 'HKLM:\Software\Microsoft\VisualStudio\14.0\VC\Runtimes\x64')) {
             $vcRedistX64File = Join-Path -Path $PWD -ChildPath 'vc_redist.x64.exe'
-            Write-Host "vc_redist.x64.exe indiriliyor ve yukleniyor..."
+            Write-Host "Downloading and installing vc_redist.x64.exe..."
             Get-File -Uri $vcRedistX64Url -TargetFile $vcRedistX64File
             Start-Process -FilePath $vcRedistX64File -ArgumentList "/install /quiet /norestart" -Wait
         }
@@ -280,7 +288,7 @@ function Install-VcRedist {
     else {
         if (!(Test-Path 'HKLM:\Software\Microsoft\VisualStudio\14.0\VC\Runtimes\x86')) {
             $vcRedistX86File = Join-Path -Path $PWD -ChildPath 'vc_redist.x86.exe'
-            Write-Host "vc_redist.x86.exe indiriliyor ve yukleniyor..."
+            Write-Host "Downloading and installing vc_redist.x86.exe..."
             Get-File -Uri $vcRedistX86Url -TargetFile $vcRedistX86File
             Start-Process -FilePath $vcRedistX86File -ArgumentList "/install /quiet /norestart" -Wait
         }
@@ -294,7 +302,7 @@ Pop-Location
 
 Remove-Item -LiteralPath $tempDirectory -Recurse
 
-Write-Host 'Yama islemi tamamlandi, Spotify baslatiliyor...'
+Write-Host 'Patching Complete, starting Spotify...'
 
 Start-Process -WorkingDirectory $spotifyDirectory -FilePath $spotifyExecutable
-Write-Host 'Tamamlandi.'
+Write-Host 'Done.'
