@@ -1,7 +1,7 @@
 param (
   [Parameter()]
   [switch]
-  $UninstallSpotifyStoreEdition = (Read-Host -Prompt 'Uninstall Spotify Windows Store edition if it exists (Y/N)') -eq 'y',
+  $UninstallSpotifyStoreEdition = (Read-Host -Prompt 'Windows Magazasi Spotify surumunu kaldirmak istiyor musunuz? (Y/N)') -eq 'y',
   [Parameter()]
   [switch]
   $UpdateSpotify
@@ -29,12 +29,11 @@ function Get-File
     $BufferSize = 1,
     [Parameter(ValueFromPipelineByPropertyName)]
     [ValidateNotNullOrEmpty()]
-    [ValidateSet('KB, MB')]
+    [ValidateSet('KB', 'MB')]
     [String]
     $BufferUnit = 'MB',
     [Parameter(ValueFromPipelineByPropertyName)]
     [ValidateNotNullOrEmpty()]
-    [ValidateSet('KB, MB')]
     [Int32]
     $Timeout = 10000
   )
@@ -105,10 +104,10 @@ function Test-SpotifyVersion
 Write-Host @'
 **********************************
 
-    ____       ____  ______     ____                
-   / __ \___  / __ \/_  __/____/ __ )____  __  __   
-  / /_/ / _ \/ / / / / / / ___/ __  / __ \/ / / /   
- / _, _/  __/ /_/ / / / / /  / /_/ / /_/ / /_/ /    
+    ____       ____  ______     ____
+   / __ \___  / __ \/_  __/____/ __ )____  __  __
+  / /_/ / _ \/ / / / / / / ___/ __  / __ \/ / / /
+ / _, _/  __/ /_/ / / / / /  / /_/ / /_/ / /_/ /
 /_/ |_|\___/_____/ /_/ /_/  /_____/\____/\__, /_____
                                         /____/_____/
 
@@ -228,7 +227,6 @@ if (-not $spotifyInstalled -or $UpdateSpotify -or $unsupportedClientVersion)
     # Waiting until installation complete
     Start-Sleep -Milliseconds 100
   }
-
 
   Write-Host 'Stopping Spotify...Again'
 
